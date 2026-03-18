@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sammy Pong</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a1a;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #f9a825, #ff6f00);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    #score {
+      font-size: 1.4rem;
+      letter-spacing: 0.2em;
+      margin-bottom: 12px;
+      color: #aaa;
+    }
+
+    canvas {
+      border: 2px solid #333;
+      border-radius: 8px;
+      display: block;
+    }
+
+    #controls {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: #555;
+      display: flex;
+      gap: 40px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sammy Pong</h1>
+  <div id="score">0 — 0</div>
+  <canvas id="game" width="700" height="480"></canvas>
+  <div id="controls">
+    <span>Player 1 (bottom): A / D</span>
+    <span>Player 2 (top): ← / →</span>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const PADDLE_W = 90;
+    const PADDLE_H = 12;
+    const PADDLE_SPEED = 6;
+    const BALL_SIZE = 10;
+
+    const state = {
+      p1: { x: W / 2 - PADDLE_W / 2, score: 0 },  // bottom
+      p2: { x: W / 2 - PADDLE_W / 2, score: 0 },  // top
+      ball: { x: W / 2, y: H / 2, vx: 3.5, vy: 3.5 },
+      keys: {}
+    };
+
+    document.addEventListener('keydown', e => state.keys[e.key] = true);
+    document.addEventListener('keyup',   e => state.keys[e.key] = false);
+
+    function resetBall(towardPlayer) {
+      state.ball.x = W / 2;
+      state.ball.y = H / 2;
+      const angle = (Math.random() * 60 - 30) * Math.PI / 180;
+      const speed = 3.5;
+      state.ball.vx = speed * Math.sin(angle);
+      state.ball.vy = towardPlayer === 1 ? speed * Math.cos(angle) : -speed * Math.cos(angle);
+    }
+
+    function update() {
+      const k = state.keys;
+
+      // Move paddles
+      if (k['a'] || k['A']) state.p1.x -= PADDLE_SPEED;
+      if (k['d'] || k['D']) state.p1.x += PADDLE_SPEED;
+      if (k['ArrowLeft'])    state.p2.x -= PADDLE_SPEED;
+      if (k['ArrowRight'])   state.p2.x += PADDLE_SPEED;
+
+      // Clamp paddles
+      state.p1.x = Math.max(0, Math.min(W - PADDLE_W, state.p1.x));
+      state.p2.x = Math.max(0, Math.min(W - PADDLE_W, state.p2.x));
+
+      // Move ball
+      state.ball.x += state.ball.vx;
+      state.ball.y += state.ball.vy;
+
+      // Wall bounce (left/right)
+      if (state.ball.x - BALL_SIZE / 2 <= 0) {
+        state.ball.x = BALL_SIZE / 2;
+        state.ball.vx *= -1;
+      }
+      if (state.ball.x + BALL_SIZE / 2 >= W) {
+        state.ball.x = W - BALL_SIZE / 2;
+        state.ball.vx *= -1;
+      }
+
+      const p1Y = H - 30 - PADDLE_H;
+      const p2Y = 30;
+
+      // Paddle 1 collision (bottom)
+      if (
+        state.ball.vy > 0 &&
+        state.ball.y + BALL_SIZE / 2 >= p1Y &&
+        state.ball.y + BALL_SIZE / 2 <= p1Y + PADDLE_H &&
+        state.ball.x >= state.p1.x &&
+        state.ball.x <= state.p1.x + PADDLE_W
+      ) {
+        state.ball.vy *= -1;
+        const hit = (state.ball.x - (state.p1.x + PADDLE_W / 2)) / (PADDLE_W / 2);
+        state.ball.vx = hit * 5;
+        state.ball.y = p1Y - BALL_SIZE / 2;
+      }
+
+      // Paddle 2 collision (top)
+      if (
+        state.ball.vy < 0 &&
+        state.ball.y - BALL_SIZE / 2 <= p2Y + PADDLE_H &&
+        state.ball.y - BALL_SIZE / 2 >= p2Y &&
+        state.ball.x >= state.p2.x &&
+        state.ball.x <= state.p2.x + PADDLE_W
+      ) {
+        state.ball.vy *= -1;
+        const hit = (state.ball.x - (state.p2.x + PADDLE_W / 2)) / (PADDLE_W / 2);
+        state.ball.vx = hit * 5;
+        state.ball.y = p2Y + PADDLE_H + BALL_SIZE / 2;
+      }
+
+      // Score
+      if (state.ball.y - BALL_SIZE / 2 <= 0) {
+        state.p1.score++;
+        scoreEl.textContent = `${state.p2.score} — ${state.p1.score}`;
+        resetBall(2);
+      }
+      if (state.ball.y + BALL_SIZE / 2 >= H) {
+        state.p2.score++;
+        scoreEl.textContent = `${state.p2.score} — ${state.p1.score}`;
+        resetBall(1);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Background
+      ctx.fillStyle = '#0f0f22';
+      ctx.fillRect(0, 0, W, H);
+
+      // Center dashed line
+      ctx.setLineDash([10, 10]);
+      ctx.strokeStyle = '#2a2a4a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, H / 2);
+      ctx.lineTo(W, H / 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const p1Y = H - 30 - PADDLE_H;
+      const p2Y = 30;
+
+      // Paddles
+      ctx.fillStyle = '#f9a825';
+      ctx.beginPath();
+      ctx.roundRect(state.p1.x, p1Y, PADDLE_W, PADDLE_H, 6);
+      ctx.fill();
+
+      ctx.fillStyle = '#42a5f5';
+      ctx.beginPath();
+      ctx.roundRect(state.p2.x, p2Y, PADDLE_W, PADDLE_H, 6);
+      ctx.fill();
+
+      // Ball
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(state.ball.x, state.ball.y, BALL_SIZE / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
